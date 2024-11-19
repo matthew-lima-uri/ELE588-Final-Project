@@ -36,7 +36,7 @@ def get_player_action():
         if game.can_fold():
             game.fold()
             print("You have folded. The game is over.")
-            ys.exit(0)
+            sys.exit(0)
         else:
             print("Screw you; you can't fold!")
             game.check_or_call()

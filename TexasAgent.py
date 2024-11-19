@@ -4,7 +4,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from collections import deque
-from gym import Environment
+from gym import PokerGame
 
 """
 System constants
@@ -167,7 +167,7 @@ def main():
 
     # Initialize game environment
     agent = Agent(state_size, action_size)
-    env = Environment(number_of_players=6) # Agent + 5 other players
+    env = PokerGame(number_of_players=6) # Agent + 5 other players
 
     update_target_every = 100  # Update target network every 100 episodes
 

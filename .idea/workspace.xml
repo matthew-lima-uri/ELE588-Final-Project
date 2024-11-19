@@ -4,8 +4,12 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="ce4e473f-4dec-4c0f-a50a-d2ed15b40280" name="Changes" comment="Initial commit. PokerKitTest.py includes a working prototype hold'em game that is played via the console. This was made to get a better understanding of the library.">
+    <list default="true" id="ce4e473f-4dec-4c0f-a50a-d2ed15b40280" name="Changes" comment="Updated PokerKitTest.py to include support for going all in.">
+      <change afterPath="$PROJECT_DIR$/PokerKitEnvironmentTest.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/PokerKitTest.py" beforeDir="false" afterPath="$PROJECT_DIR$/PokerKitTest.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/TexasAgent.py" beforeDir="false" afterPath="$PROJECT_DIR$/TexasAgent.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/gym.py" beforeDir="false" afterPath="$PROJECT_DIR$/gym.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -22,18 +26,18 @@
   <component name="Git.Settings">
     <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
   </component>
-  <component name="GitHubPullRequestSearchHistory"><![CDATA[{
-  "lastFilter": {
-    "state": "OPEN",
-    "assignee": "matthew-lima-uri"
+  <component name="GitHubPullRequestSearchHistory">{
+  &quot;lastFilter&quot;: {
+    &quot;state&quot;: &quot;OPEN&quot;,
+    &quot;assignee&quot;: &quot;matthew-lima-uri&quot;
   }
-}]]></component>
-  <component name="GithubPullRequestsUISettings"><![CDATA[{
-  "selectedUrlAndAccountId": {
-    "url": "https://github.com/matthew-lima-uri/ELE588-Final-Project",
-    "accountId": "f38d839d-0404-4e03-9a2f-21304fda2a16"
+}</component>
+  <component name="GithubPullRequestsUISettings">{
+  &quot;selectedUrlAndAccountId&quot;: {
+    &quot;url&quot;: &quot;https://github.com/matthew-lima-uri/ELE588-Final-Project&quot;,
+    &quot;accountId&quot;: &quot;f38d839d-0404-4e03-9a2f-21304fda2a16&quot;
   }
-}]]></component>
+}</component>
   <component name="ProjectColorInfo">{
   &quot;associatedIndex&quot;: 2
 }</component>
@@ -45,6 +49,7 @@
   </component>
   <component name="PropertiesComponent">{
   &quot;keyToString&quot;: {
+    &quot;Python.PokerKitEnvironmentTest.executor&quot;: &quot;Run&quot;,
     &quot;Python.PokerKitTest.executor&quot;: &quot;Run&quot;,
     &quot;Python.TexasAgent.executor&quot;: &quot;Run&quot;,
     &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
@@ -54,6 +59,35 @@
     &quot;settings.editor.selected.configurable&quot;: &quot;com.jetbrains.python.configuration.PyActiveSdkModuleConfigurable&quot;
   }
 }</component>
+  <component name="RunManager">
+    <configuration name="PokerKitEnvironmentTest" type="PythonConfigurationType" factoryName="Python" temporary="true" nameIsGenerated="true">
+      <module name="ELE588_Final_Project" />
+      <option name="ENV_FILES" value="" />
+      <option name="INTERPRETER_OPTIONS" value="" />
+      <option name="PARENT_ENVS" value="true" />
+      <envs>
+        <env name="PYTHONUNBUFFERED" value="1" />
+      </envs>
+      <option name="SDK_HOME" value="" />
+      <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$" />
+      <option name="IS_MODULE_SDK" value="true" />
+      <option name="ADD_CONTENT_ROOTS" value="true" />
+      <option name="ADD_SOURCE_ROOTS" value="true" />
+      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/PokerKitEnvironmentTest.py" />
+      <option name="PARAMETERS" value="" />
+      <option name="SHOW_COMMAND_LINE" value="false" />
+      <option name="EMULATE_TERMINAL" value="false" />
+      <option name="MODULE_MODE" value="false" />
+      <option name="REDIRECT_INPUT" value="false" />
+      <option name="INPUT_FILE" value="" />
+      <method v="2" />
+    </configuration>
+    <recent_temporary>
+      <list>
+        <item itemvalue="Python.PokerKitEnvironmentTest" />
+      </list>
+    </recent_temporary>
+  </component>
   <component name="SharedIndexes">
     <attachedChunks>
       <set>
@@ -78,7 +112,15 @@
       <option name="project" value="LOCAL" />
       <updated>1731896988504</updated>
     </task>
-    <option name="localTasksCounter" value="2" />
+    <task id="LOCAL-00002" summary="Updated PokerKitTest.py to include support for going all in.">
+      <option name="closed" value="true" />
+      <created>1731970273223</created>
+      <option name="number" value="00002" />
+      <option name="presentableId" value="LOCAL-00002" />
+      <option name="project" value="LOCAL" />
+      <updated>1731970273223</updated>
+    </task>
+    <option name="localTasksCounter" value="3" />
     <servers />
   </component>
   <component name="Vcs.Log.Tabs.Properties">
@@ -94,6 +136,7 @@
   </component>
   <component name="VcsManagerConfiguration">
     <MESSAGE value="Initial commit. PokerKitTest.py includes a working prototype hold'em game that is played via the console. This was made to get a better understanding of the library." />
-    <option name="LAST_COMMIT_MESSAGE" value="Initial commit. PokerKitTest.py includes a working prototype hold'em game that is played via the console. This was made to get a better understanding of the library." />
+    <MESSAGE value="Updated PokerKitTest.py to include support for going all in." />
+    <option name="LAST_COMMIT_MESSAGE" value="Updated PokerKitTest.py to include support for going all in." />
   </component>
 </project>
