@@ -72,16 +72,11 @@ class PokerGame:
                 current_stacks[idx] = self.__starting_stack
                 rewards[idx] = -1
             # If this player is in the lead
-            elif bank == np.max(current_stacks):
-                # If this player maxed out their bank
-                if bank >= self.__max_bank:
-                    rewards[idx] = 1
-                    current_stacks[idx] = self.__max_bank
-                else:
-                    rewards[idx] = 0.5
-
+            elif bank >= self.__max_bank:
+                current_stacks[idx] = self.__max_bank
+                rewards[idx] = 1
             else:
-                rewards[idx] = 0
+                rewards[idx] = current_stacks[idx] / self.__max_bank
         self.reset(current_stacks)
         return rewards
 
@@ -274,16 +269,17 @@ class PokerGame:
             if self.get_player_bank(player_index) == 0:
                 return -1
             else:
-                return -1 * ((self.get_player_bank(player_index)) / (self.get_player_bank(player_index) + last_operation.amount))
+                return -1 * (last_operation.amount / (self.get_player_bank(player_index) + last_operation.amount))
         elif type(last_operation) == pokerkit.CheckingOrCalling:
             # If there is money involved in the call, assign a slight negative reward
             if last_operation.amount > 0:
-                return -0.5 * ((self.get_player_bank(player_index)) / (self.get_player_bank(player_index) + last_operation.amount))
+                return -0.5 * (last_operation.amount / (self.get_player_bank(player_index) + last_operation.amount))
             # If the call is a check, no negative reward needed
             else:
                 return 0.1
         elif type(last_operation) == pokerkit.Folding:
-            return -0.25
+            # Reward loss is the total amount of money the player invested into this game
+            return -1 * (self.__game.bets[player_index] + self.__game.antes[player_index] / (self.get_player_bank(player_index) + self.__game.bets[player_index] + self.__game.antes[player_index]))
         elif type(last_operation) == pokerkit.ChipsPulling:
             return 1
 

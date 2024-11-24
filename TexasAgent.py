@@ -38,20 +38,20 @@ class DQN(nn.Module):
         # Initialize weights
         for m in self.modules():
             if isinstance(m, nn.Linear):
-                nn.init.kaiming_uniform_(m.weight, nonlinearity='tanh')
+                nn.init.kaiming_uniform_(m.weight, nonlinearity='relu')
                 nn.init.constant_(m.bias, 0)
 
     def forward(self, x):
         x = self.fc1(x)
         x = self.bn1(x)
-        x = torch.tanh(x)
+        x = torch.relu(x)
         x = self.fc2(x)
         x = self.bn2(x)
-        x = torch.tanh(x)
+        x = torch.relu(x)
         x = self.fc3(x)
         x = self.bn3(x)
-        x = torch.tanh(x)
-        return torch.sigmoid(self.fc4(x))
+        x = torch.relu(x)
+        return self.fc4(x)
 
 
 # Define the Replay Buffer
@@ -68,22 +68,54 @@ class ReplayBuffer:
     def __len__(self):
         return len(self.memory)
 
+class NStepReplayBuffer:
+    def __init__(self, capacity, n_step, gamma):
+        self.buffer = deque(maxlen=capacity)
+        self.n_step_buffer = deque(maxlen=n_step)
+        self.n_step = n_step
+        self.gamma = gamma
+
+    def push(self, experience):
+        self.n_step_buffer.append(experience)
+        if len(self.n_step_buffer) == self.n_step:
+            state, action, _, _, _ = self.n_step_buffer[0]
+            reward, next_state, done = self._get_n_step_info()
+            self.buffer.append((state, action, reward, next_state, done))
+
+    def _get_n_step_info(self):
+        reward, next_state, done = self.n_step_buffer[-1][2:]
+        for transition in reversed(list(self.n_step_buffer)[:-1]):
+            _, _, r, ns, d = transition  # Correct unpacking
+            reward = r + self.gamma * reward * (1 - d)
+            if d:
+                next_state = ns
+                done = d
+        return reward, next_state, done
+
+    def sample(self, batch_size):
+        batch = random.sample(self.buffer, batch_size)
+        return batch
+
+    def __len__(self):
+        return len(self.buffer)
+
 
 # Define the Agent
 class Agent:
-    def __init__(self, state_size, action_size, memory=ReplayBuffer(1000000)):
+    def __init__(self, state_size, action_size, n_step = 1, gamma=0.99):
         self.state_size = state_size
         self.action_size = action_size
-        self.memory = memory
-        self.__gamma = 0.99  # Discount factor
+        self.__gamma = gamma  # Discount factor
+        self.__memory = NStepReplayBuffer(1000000, n_step, gamma)
+        self.__n_step = n_step
         self.__epsilon = 1.0  # Exploration rate
-        self.__epsilon_min = 0.01
-        self.__epsilon_decay = 0.995
+        self.__epsilon_min = 0.1
+        self.__epsilon_decay = 0.999
         self.__learning_rate = 0.0001
-        self.__batch_size = 256
+        self.__batch_size = 32
         self.__epoch_reward = 0
         self.__update_steps = 0
-        self.__target_update_frequency = 1000  # Update every 1000 steps
+        self.__target_update_frequency = 100  # Update every 1000 steps
         self.__loss_fn = nn.SmoothL1Loss()
 
         self.__device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -92,7 +124,7 @@ class Agent:
         self.__target_net = DQN(state_size, action_size).to(self.__device)
         self.update_target_network()
         self.__optimizer = optim.Adam(self.__policy_net.parameters(), lr=self.__learning_rate)
-        self.__scheduler = torch.optim.lr_scheduler.StepLR(self.__optimizer, step_size=1000, gamma=self.__gamma)
+        self.__scheduler = torch.optim.lr_scheduler.StepLR(self.__optimizer, step_size=self.__target_update_frequency, gamma=self.__gamma)
 
     def update_target_network(self):
         self.__target_net.load_state_dict(self.__policy_net.state_dict())
@@ -134,27 +166,27 @@ class Agent:
 
 
     def remember(self, state, action, reward, next_state, done):
-        self.memory.push(state, action, reward, next_state, done)
+        self.__memory.push((state, action, reward, next_state, done))
 
     def replay(self):
-        if len(self.memory) < self.__batch_size:
+        if len(self.__memory) < self.__batch_size:
             return
-        batch = self.memory.sample(self.__batch_size)
 
-        # Extract states, actions, rewards, next_states, and dones from experiences
+        batch = self.__memory.sample(self.__batch_size)
+
         states = torch.tensor(np.array([b[0] for b in batch]), dtype=torch.float32).to(self.__device)
-        actions = torch.tensor([b[1] for b in batch], dtype=torch.int64).unsqueeze(1).to(self.__device)
+        actions = torch.tensor(np.array([b[1] for b in batch]), dtype=torch.int64).unsqueeze(1).to(self.__device)
         rewards = torch.tensor([b[2] for b in batch], dtype=torch.float32).unsqueeze(1).to(self.__device)
         next_states = torch.tensor(np.array([b[3] for b in batch]), dtype=torch.float32).to(self.__device)
-        dones = torch.tensor([b[4] for b in batch], dtype=torch.float32).unsqueeze(1).to(self.__device)
+        dones = torch.tensor(np.array([b[4] for b in batch]), dtype=torch.float32).unsqueeze(1).to(self.__device)
 
         # Compute current Q-values
         current_q_values = self.__policy_net(states).gather(1, actions)
 
-        # Compute target Q-values
+        # Compute target Q-values using n-step returns
         with torch.no_grad():
             next_q_values = self.__target_net(next_states).max(1)[0].unsqueeze(1)
-            target_q_values = rewards + (self.__gamma * next_q_values * (1 - dones))
+            target_q_values = rewards + (self.__gamma ** self.__n_step) * next_q_values * (1 - dones)
 
         # Compute loss
         loss = self.__loss_fn(current_q_values, target_q_values)
@@ -282,13 +314,13 @@ def main():
 
     # Define training parameters
     games_per_epoch = 100
-    epochs = 10
+    epochs = 25
 
     # Initialize game environment
     agent_list = []
     mean_reward_list = []
     for i in range(number_of_agents):
-        agent_list.append(Agent(state_size, action_size))
+        agent_list.append(Agent(state_size, action_size, n_step=6))
     env = PokerGame(number_of_players=number_of_agents)
 
     # Record the start time
@@ -331,7 +363,7 @@ def main():
                     # Update state vector based on the new state from the agent's action
                     next_state_vector = agent.get_state_vector(next_state, index)
                     # Get the reward from the environment based on the previous action
-                    reward = env.get_reward(i) # Environment tracks players based on I value, not index
+                    reward = env.get_reward(index) # Environment tracks players based on I value, not index
                     # Record this reward for metrics
                     agent.update_epoch_reward(reward)
                     # Check if the game is finished
