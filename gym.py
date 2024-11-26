@@ -8,10 +8,11 @@ turn_index = Index number of whoever the game is waiting on to take an action
 
 """
 
+
 class GameState:
 
-    def __init__(self, player_cards, board_cards, pot, betting_round, player_bets, player_banks, player_statuses, all_in):
-
+    def __init__(self, player_cards, board_cards, pot, betting_round, player_bets, player_banks, player_statuses,
+                 all_in):
         self.player_cards = player_cards
         self.board_cards = board_cards
         self.pot = pot
@@ -20,6 +21,7 @@ class GameState:
         self.player_banks = player_banks
         self.player_statuses = player_statuses
         self.all_in = all_in
+
 
 class PokerGame:
 
@@ -71,7 +73,7 @@ class PokerGame:
             if bank == 0:
                 current_stacks[idx] = self.__starting_stack
                 rewards[idx] = -1
-            # If this player is in the lead
+            # If this player has the max amount of money allowed
             elif bank >= self.__max_bank:
                 current_stacks[idx] = self.__max_bank
                 rewards[idx] = 1
@@ -129,7 +131,6 @@ class PokerGame:
                          betting_round=betting_round, player_bets=player_bets, player_banks=banks,
                          player_statuses=player_statuses, all_in=all_in)
 
-
     def get_betting_round(self):
         round = len(self.__game.burn_cards)
         if round is None:
@@ -149,7 +150,7 @@ class PokerGame:
         return self.__game.total_pot_amount
 
     def get_best_hand(self, player_index):
-        return self.__game.get_hand(player_index,0,0)
+        return self.__game.get_hand(player_index, 0, 0)
 
     def get_player_bank(self, player_index):
         return self.__game.stacks[player_index]
@@ -168,6 +169,29 @@ class PokerGame:
 
     def get_game_winner(self):
         return self.__game.operations[-1].player_index, self.__game.operations[-1].amount
+
+    def get_relevant_operations_this_round(self):
+
+        # Get all operations between this betting round and the previous
+        operation_log = []
+        for operation in reversed(self.__game.operations):
+            if type(operation) != pokerkit.CardBurning:
+                if type(operation) == pokerkit.CompletionBettingOrRaisingTo:
+                    operation_log.append(
+                        "Player " + str(operation.player_index + 1) + " raised $" + str(operation.amount) + "\n")
+                elif type(operation) == pokerkit.CheckingOrCalling:
+                    operation_log.append(
+                        "Player " + str(operation.player_index + 1) + " called $" + str(operation.amount) + "\n")
+                elif type(operation) == pokerkit.Folding:
+                    operation_log.append("Player " + str(operation.player_index + 1) + " folded" + "\n")
+            else:
+                break
+
+                # Now reverse it
+        reversed_string_list = ""
+        for op in reversed(operation_log):
+            reversed_string_list = reversed_string_list + op
+        return reversed_string_list
 
     def execute_agent_action(self, action, raise_amount=5):
         action = action.upper()
@@ -259,7 +283,6 @@ class PokerGame:
             except AttributeError:
                 continue
 
-
         # If the player hasn't performed yet, no reward
         if last_operation is None:
             return 0
@@ -267,19 +290,21 @@ class PokerGame:
         if type(last_operation) == pokerkit.CompletionBettingOrRaisingTo:
             # If the player went all in, heavily punish them
             if self.get_player_bank(player_index) == 0:
-                return -1
+                return -8
             else:
-                return -1 * (last_operation.amount / (self.get_player_bank(player_index) + last_operation.amount))
+                return -0.75 * (last_operation.amount / (self.get_player_bank(player_index) + last_operation.amount))
         elif type(last_operation) == pokerkit.CheckingOrCalling:
             # If there is money involved in the call, assign a slight negative reward
             if last_operation.amount > 0:
                 return -0.5 * (last_operation.amount / (self.get_player_bank(player_index) + last_operation.amount))
             # If the call is a check, no negative reward needed
             else:
-                return 0.1
+                return 0
         elif type(last_operation) == pokerkit.Folding:
             # Reward loss is the total amount of money the player invested into this game
-            return -1 * (self.__game.bets[player_index] + self.__game.antes[player_index] / (self.get_player_bank(player_index) + self.__game.bets[player_index] + self.__game.antes[player_index]))
+            return -1 * (self.__game.bets[player_index] + self.__game.antes[player_index] / (
+                        self.get_player_bank(player_index) + self.__game.bets[player_index] + self.__game.antes[
+                    player_index]))
         elif type(last_operation) == pokerkit.ChipsPulling:
             return 1
 

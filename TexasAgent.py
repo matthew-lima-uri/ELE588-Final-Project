@@ -1,3 +1,5 @@
+from copy import deepcopy
+
 import numpy as np
 import random
 import torch
@@ -65,6 +67,12 @@ class ReplayBuffer:
     def sample(self, batch_size):
         return random.sample(self.memory, batch_size)
 
+    def get_buffer(self):
+        return self.memory
+
+    def copy(self, memory_buffer):
+        self.memory = deepcopy(memory_buffer)
+
     def __len__(self):
         return len(self.memory)
 
@@ -96,35 +104,47 @@ class NStepReplayBuffer:
         batch = random.sample(self.buffer, batch_size)
         return batch
 
+    def get_buffers(self):
+        return self.buffer, self.n_step_buffer
+
+    def copy(self, memory_buffer, n_step_buffer):
+        self.buffer = deepcopy(memory_buffer)
+        self.n_step_buffer = deepcopy(n_step_buffer)
+
+
     def __len__(self):
         return len(self.buffer)
 
 
 # Define the Agent
 class Agent:
-    def __init__(self, state_size, action_size, n_step = 1, gamma=0.99):
+    def __init__(self, state_size, action_size, n_step = 1, gamma=0.99, memory=None, max_pot=10000):
         self.state_size = state_size
         self.action_size = action_size
         self.__gamma = gamma  # Discount factor
-        self.__memory = NStepReplayBuffer(1000000, n_step, gamma)
+        if memory is None:
+            self.__memory = NStepReplayBuffer(1000000, n_step, gamma)
+        else:
+            self.__memory = memory
         self.__n_step = n_step
         self.__epsilon = 1.0  # Exploration rate
         self.__epsilon_min = 0.1
-        self.__epsilon_decay = 0.999
-        self.__learning_rate = 0.0001
-        self.__batch_size = 32
+        self.__epsilon_decay = 0.9999
+        self.__learning_rate = 0.1
+        self.__batch_size = 512
         self.__epoch_reward = 0
         self.__update_steps = 0
-        self.__target_update_frequency = 100  # Update every 1000 steps
+        self.__target_update_frequency = 100  # Update every 100 steps
         self.__loss_fn = nn.SmoothL1Loss()
+        self.__max_pot = max_pot
 
         self.__device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
         self.__policy_net = DQN(state_size, action_size).to(self.__device)
         self.__target_net = DQN(state_size, action_size).to(self.__device)
         self.update_target_network()
-        self.__optimizer = optim.Adam(self.__policy_net.parameters(), lr=self.__learning_rate)
-        self.__scheduler = torch.optim.lr_scheduler.StepLR(self.__optimizer, step_size=self.__target_update_frequency, gamma=self.__gamma)
+        self.__optimizer = optim.RMSprop(self.__policy_net.parameters(), lr=self.__learning_rate)
+        self.__scheduler = torch.optim.lr_scheduler.StepLR(self.__optimizer, step_size=500)
 
     def update_target_network(self):
         self.__target_net.load_state_dict(self.__policy_net.state_dict())
@@ -224,6 +244,9 @@ class Agent:
         self.__policy_net.load_state_dict(torch.load(filepath))
         self.update_target_network()
 
+    def get_memory(self):
+        return self.__memory
+
     @staticmethod
     # Function to map PokerKit card definitions to Agent definitions
     def get_card(card):
@@ -249,7 +272,7 @@ class Agent:
             state_vector[3] = state_vector[1] / 4  # Max value for a suit
 
         # Encode own bank
-        state_vector[4] = state.player_banks[player_index] / 1000 # Max value for a bank
+        state_vector[4] = state.player_banks[player_index] / self.__max_pot # Max value for a bank
 
         # Encode community cards
         for i in range(len(state.board_cards)):
@@ -260,7 +283,7 @@ class Agent:
                 # Community cards that have an unknown value will remain 0
 
         # Encode the pool
-        state_vector[15] = state.pot / (1000 * number_of_agents) # Maximum theoretical pot
+        state_vector[15] = state.pot / (self.__max_pot * number_of_agents) # Maximum theoretical pot
 
         # Encode the betting round
         state_vector[16] = state.betting_round / 4 # Max value for betting rounds
@@ -280,7 +303,7 @@ class Agent:
             # Skip the own players status
             if i == player_index:
                 continue
-            state_vector[22 + agent_index] = state.player_bets[agent_index] / 1000 # Theoretical max bet per player
+            state_vector[22 + agent_index] = state.player_bets[agent_index] / self.__max_pot # Theoretical max bet per player
             agent_index = agent_index + 1
 
         # Encode the other player banks
@@ -289,7 +312,7 @@ class Agent:
             # Skip the own players bank
             if i == player_index:
                 continue
-            state_vector[27 + agent_index] = state.player_banks[agent_index] / 1000 # Max bank per player
+            state_vector[27 + agent_index] = state.player_banks[agent_index] / self.__max_pot # Max bank per player
             agent_index = agent_index + 1
 
         return state_vector
@@ -313,15 +336,19 @@ def progress_bar(percent, epoch):
 def main():
 
     # Define training parameters
-    games_per_epoch = 100
-    epochs = 25
+    games_per_epoch = 1000
+    epochs = 100
 
     # Initialize game environment
     agent_list = []
     mean_reward_list = []
+    n_step = 3
+    gamma=0.99
+    max_bank=10000
+    shared_memory=NStepReplayBuffer(100000, n_step, gamma)
     for i in range(number_of_agents):
-        agent_list.append(Agent(state_size, action_size, n_step=6))
-    env = PokerGame(number_of_players=number_of_agents)
+        agent_list.append(Agent(state_size, action_size, n_step, gamma, shared_memory, max_bank))
+    env = PokerGame(number_of_players=number_of_agents, max_bank=max_bank)
 
     # Record the start time
     start_time = time.perf_counter()
@@ -363,7 +390,7 @@ def main():
                     # Update state vector based on the new state from the agent's action
                     next_state_vector = agent.get_state_vector(next_state, index)
                     # Get the reward from the environment based on the previous action
-                    reward = env.get_reward(index) # Environment tracks players based on I value, not index
+                    reward = env.get_reward(i) # Environment tracks players based on I value, not index
                     # Record this reward for metrics
                     agent.update_epoch_reward(reward)
                     # Check if the game is finished
@@ -418,6 +445,15 @@ def main():
             agent.reset_epoch_reward()
         print("Average reward for this Epoch " + str(epoch) + ": " + str(np.mean(rewards)))
         mean_reward_list.append(np.mean(rewards))
+
+        # Save the weights every 100 epochs
+        if epoch % 100 == 0:
+            # Save the trained model that had the highest number of games won
+            best_agent_idx = np.where(rewards == np.max(rewards))[0][0]
+            print("Agent " + str(
+                best_agent_idx) + " had the best performance in the last epoch. Saving the model weights.")
+            torch.save(agent_list[best_agent_idx].get_policy_network().state_dict(), 'dqn_poker_model.pth')
+
 
     # Record the end time
     end_time = time.perf_counter()
