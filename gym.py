@@ -204,19 +204,23 @@ class PokerGame:
         if action == "F":
             if self.__game.can_fold():
                 self.__game.fold()
+                return "F"
             else:
                 # If folding isn't possible, check/call. This usually happens because the player is the first bet
                 if self.__game.can_check_or_call():
                     self.__game.check_or_call()
+                    return "C"
                 else:
                     raise Exception("Game error. Can't check or call.")
         elif action == "C":
             if self.__game.can_check_or_call():
                 self.__game.check_or_call()
+                return "C"
             else:
                 # Can't check or call probably means they need to fold
                 if self.__game.can_fold():
                     self.__game.fold()
+                    return "F"
                 else:
                     raise Exception("Game error. Can't fold.")
         elif action == "R":
@@ -228,19 +232,22 @@ class PokerGame:
                 # Can't raise, so check or call
                 if self.__game.can_check_or_call():
                     self.__game.check_or_call()
-                    self.__last_call = self.__game.completion_betting_or_raising_amount
+                    return "C"
                 else:
                     # Can't check or call probably means they need to fold
                     if self.__game.can_fold():
                         self.__game.fold()
+                        return "F"
                     else:
                         raise Exception("Game error. Can't fold.")
             else:
                 try:
                     self.__game.complete_bet_or_raise_to(raise_amount)
                     self.__last_raise = raise_amount
+                    return "R"
                 except:
                     self.__game.check_or_call()
+                    return "C"
         elif action == "A":
             # Set the raise amount to be the players entire bank
             raise_amount = self.get_player_bank(self.__game.turn_index)
@@ -254,22 +261,24 @@ class PokerGame:
                 if self.__game.can_check_or_call():
                     self.__game.check_or_call()
                     self.__last_call = self.__game.completion_betting_or_raising_amount
+                    return "C"
                 else:
                     # Can't check or call probably means they need to fold
                     if self.__game.can_fold():
                         self.__game.fold()
+                        return "F"
                     else:
                         raise Exception("Game error. Can't fold.")
             else:
                 try:
                     self.__game.complete_bet_or_raise_to(raise_amount)
                     self.__last_raise = raise_amount
+                    return "A"
                 except:
                     self.__game.check_or_call()
+                    return "C"
         else:
             raise Exception("Not a valid input")
-
-        return self.encode_game_state()
 
     def get_reward(self, player_index):
 
@@ -290,22 +299,20 @@ class PokerGame:
         if type(last_operation) == pokerkit.CompletionBettingOrRaisingTo:
             # If the player went all in, heavily punish them
             if self.get_player_bank(player_index) == 0:
-                return -8
+                return -0.9
             else:
-                return -0.75 * (last_operation.amount / (self.get_player_bank(player_index) + last_operation.amount))
+                return -0.25 * (last_operation.amount / (self.get_player_bank(player_index) + last_operation.amount))
         elif type(last_operation) == pokerkit.CheckingOrCalling:
             # If there is money involved in the call, assign a slight negative reward
             if last_operation.amount > 0:
-                return -0.5 * (last_operation.amount / (self.get_player_bank(player_index) + last_operation.amount))
+                return -0.1 * (last_operation.amount / (self.get_player_bank(player_index) + last_operation.amount))
             # If the call is a check, no negative reward needed
             else:
                 return 0
         elif type(last_operation) == pokerkit.Folding:
             # Reward loss is the total amount of money the player invested into this game
-            return -1 * (self.__game.bets[player_index] + self.__game.antes[player_index] / (
-                        self.get_player_bank(player_index) + self.__game.bets[player_index] + self.__game.antes[
-                    player_index]))
+            return -0.25 * ((self.__game.bets[player_index] + self.__game.antes[player_index]) / (self.get_player_bank(player_index) + self.__game.bets[player_index] + self.__game.antes[player_index]))
         elif type(last_operation) == pokerkit.ChipsPulling:
-            return 1
+            return (self.__game.payoffs[player_index] / self.__max_bank) + 1
 
         return 0

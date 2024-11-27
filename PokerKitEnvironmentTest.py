@@ -3,8 +3,8 @@ from TexasAgent import Agent
 import os
 
 num_players = 6
-real_players = 2
-env = PokerGame(number_of_players=num_players, ante=1, minimum_bet=1, starting_stacks=100)
+real_players = 1
+env = PokerGame(number_of_players=num_players, ante=100, minimum_bet=1, starting_stacks=1000, max_bank=10000)
 agents = []
 for i in range(num_players - real_players):
     agents.append(Agent(32, 4, ))
@@ -21,6 +21,12 @@ def get_player_action():
     return action, amount
 
 
+# Determine if debug mode is on
+debug_mode_str = input("Debug mode? (Y/N)")
+debug_mode = False
+if debug_mode_str.upper() == "Y":
+    debug_mode = True
+
 # Loop until the players wish to quit
 while True:
 
@@ -32,7 +38,8 @@ while True:
         for player in range(num_players):
 
             # Clear the screen
-            os.system('cls')
+            if not debug_mode:
+                os.system('cls')
 
             # Check if the game ended as a result of the player actions
             if env.is_game_finished():
@@ -90,10 +97,23 @@ while True:
                 print("")
 
             else:
+
+                if debug_mode:
+                    print("Player " + str(player + 1) + " information:")
+                    player_hand = env.get_player_cards(player)
+                    board_hand = env.get_board_cards()
+                    print("Hole cards: ")
+                    [print(card.__str__()) for card in player_hand]
+                    print("Player + " + str(player + 1) + " Best hand: " + str(env.get_best_hand(player)))
+                    print("")
+
                 game_state = agents[player - real_players].get_state_vector(env.encode_game_state(), player)
                 action = agents[player - real_players].decode_action(
                     agents[player - real_players].act(game_state, True))
                 env.execute_agent_action(action)
+
+    if debug_mode:
+        analyze_data = input("Press enter to make next action...")
 
     # End game information
     winning_player = env.get_winning_player()

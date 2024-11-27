@@ -5,11 +5,13 @@ import random
 import torch
 import torch.nn as nn
 import torch.optim as optim
+import torch.nn.functional as F
 from collections import deque
 from gym import PokerGame
 import time
 import sys
 from matplotlib import pyplot as plt
+from scipy.optimize import curve_fit
 
 """
 System constants
@@ -20,8 +22,10 @@ betting round, other player statuses, other player bets, other player banks.
 Action Size: Defines the output space for the model. Derived from the possible actions (Fold, Call, Raise, All-in)
 """
 number_of_agents = 6
-state_size = (2*2) + 1 + (5*2) + 1 + 1 + ((number_of_agents-1)*1) + ((number_of_agents-1)*1) + ((number_of_agents-1)*1)
+state_size = (2 * 2) + 1 + (5 * 2) + 1 + 1 + ((number_of_agents - 1) * 1) + ((number_of_agents - 1) * 1) + (
+            (number_of_agents - 1) * 1)
 action_size = 4
+
 
 # Define the Deep Q-Network
 class DQN(nn.Module):
@@ -29,30 +33,24 @@ class DQN(nn.Module):
         super(DQN, self).__init__()
 
         # Define network architecture
-        self.fc1 = nn.Linear(state_size, 256)
-        self.bn1 = nn.BatchNorm1d(256)
-        self.fc2 = nn.Linear(256, 256)
-        self.bn2 = nn.BatchNorm1d(256)
+        self.fc1 = nn.Linear(state_size, 512)
+        self.rl1 = nn.LeakyReLU()
+        self.fc2 = nn.Linear(512, 256)
+        self.rl1 = nn.LeakyReLU()
         self.fc3 = nn.Linear(256, 256)
-        self.bn3 = nn.BatchNorm1d(256)
+        self.rl1 = nn.LeakyReLU()
         self.fc4 = nn.Linear(256, action_size)
 
         # Initialize weights
         for m in self.modules():
             if isinstance(m, nn.Linear):
-                nn.init.kaiming_uniform_(m.weight, nonlinearity='relu')
+                nn.init.kaiming_uniform_(m.weight, nonlinearity='leaky_relu')
                 nn.init.constant_(m.bias, 0)
 
     def forward(self, x):
-        x = self.fc1(x)
-        x = self.bn1(x)
-        x = torch.relu(x)
-        x = self.fc2(x)
-        x = self.bn2(x)
-        x = torch.relu(x)
-        x = self.fc3(x)
-        x = self.bn3(x)
-        x = torch.relu(x)
+        x = F.leaky_relu(self.fc1(x))
+        x = F.leaky_relu(self.fc2(x))
+        x = F.leaky_relu(self.fc3(x))
         return self.fc4(x)
 
 
@@ -75,6 +73,7 @@ class ReplayBuffer:
 
     def __len__(self):
         return len(self.memory)
+
 
 class NStepReplayBuffer:
     def __init__(self, capacity, n_step, gamma):
@@ -111,14 +110,14 @@ class NStepReplayBuffer:
         self.buffer = deepcopy(memory_buffer)
         self.n_step_buffer = deepcopy(n_step_buffer)
 
-
     def __len__(self):
         return len(self.buffer)
 
 
 # Define the Agent
 class Agent:
-    def __init__(self, state_size, action_size, n_step = 1, gamma=0.99, memory=None, max_pot=10000):
+    def __init__(self, state_size, action_size, n_step=1, gamma=0.99, memory=None, max_pot=10000,
+                 target_update_freq=10):
         self.state_size = state_size
         self.action_size = action_size
         self.__gamma = gamma  # Discount factor
@@ -128,13 +127,13 @@ class Agent:
             self.__memory = memory
         self.__n_step = n_step
         self.__epsilon = 1.0  # Exploration rate
-        self.__epsilon_min = 0.1
+        self.__epsilon_min = 0.01
         self.__epsilon_decay = 0.9999
-        self.__learning_rate = 0.1
+        self.__learning_rate = 0.01
         self.__batch_size = 512
         self.__epoch_reward = 0
         self.__update_steps = 0
-        self.__target_update_frequency = 100  # Update every 100 steps
+        self.__target_update_frequency = target_update_freq
         self.__loss_fn = nn.SmoothL1Loss()
         self.__max_pot = max_pot
 
@@ -143,8 +142,8 @@ class Agent:
         self.__policy_net = DQN(state_size, action_size).to(self.__device)
         self.__target_net = DQN(state_size, action_size).to(self.__device)
         self.update_target_network()
-        self.__optimizer = optim.RMSprop(self.__policy_net.parameters(), lr=self.__learning_rate)
-        self.__scheduler = torch.optim.lr_scheduler.StepLR(self.__optimizer, step_size=500)
+        self.__optimizer = optim.AdamW(self.__policy_net.parameters(), lr=self.__learning_rate)
+        self.__scheduler = torch.optim.lr_scheduler.StepLR(self.__optimizer, step_size=self.__target_update_frequency)
 
     def update_target_network(self):
         self.__target_net.load_state_dict(self.__policy_net.state_dict())
@@ -180,17 +179,34 @@ class Agent:
         # Call/Check
         elif action == 3:
             return "C"
-         # Default to calling
+        # Default to calling
         else:
             return "C"
 
+    @staticmethod
+    def encode_action(decoded_action):
+        # All-in
+        if decoded_action == "A":
+            return 0
+        # Fold
+        elif decoded_action == "F":
+            return 1
+        # Raise
+        elif decoded_action == "R":
+            return 2
+        # Call/Check
+        elif decoded_action == "C":
+            return 3
+        # Default to calling
+        else:
+            return 3
 
     def remember(self, state, action, reward, next_state, done):
         self.__memory.push((state, action, reward, next_state, done))
 
     def replay(self):
         if len(self.__memory) < self.__batch_size:
-            return
+            return None
 
         batch = self.__memory.sample(self.__batch_size)
 
@@ -214,7 +230,7 @@ class Agent:
         # Optimize the model
         self.__optimizer.zero_grad()
         loss.backward()
-        nn.utils.clip_grad_norm_(self.__policy_net.parameters(), max_norm=1.0)
+        nn.utils.clip_grad_norm_(self.__policy_net.parameters(), max_norm=10.0)
         self.__optimizer.step()
 
         self.__update_steps += 1
@@ -227,6 +243,8 @@ class Agent:
 
         # Update the learning rate scheduler
         self.__scheduler.step()
+
+        return loss
 
     def update_epoch_reward(self, new_reward):
         self.__epoch_reward = self.__epoch_reward + new_reward
@@ -241,7 +259,8 @@ class Agent:
         return self.__policy_net
 
     def load_policy_network(self, filepath):
-        self.__policy_net.load_state_dict(torch.load(filepath))
+        self.__policy_net.load_state_dict(
+            torch.load(filepath, map_location="cuda" if torch.cuda.is_available() else "cpu"))
         self.update_target_network()
 
     def get_memory(self):
@@ -250,9 +269,9 @@ class Agent:
     @staticmethod
     # Function to map PokerKit card definitions to Agent definitions
     def get_card(card):
-        rank_dict = {'2':2, '3':3, '4':4, '5':5, '6':6, '7':7, '8':8, '9':9, 'T':10,
-                     'J':11, 'Q':12, 'K':13, 'A':14}
-        suit_dict = {'h':1, 'd':2, 'c':3, 's':4}
+        rank_dict = {'2': 2, '3': 3, '4': 4, '5': 5, '6': 6, '7': 7, '8': 8, '9': 9, 'T': 10,
+                     'J': 11, 'Q': 12, 'K': 13, 'A': 14}
+        suit_dict = {'h': 1, 'd': 2, 'c': 3, 's': 4}
 
         return rank_dict[card[0]], suit_dict[card[1]]
 
@@ -263,30 +282,30 @@ class Agent:
         state_vector = np.zeros(state_size)
 
         # Encode private cards
-        if not(state.player_cards[player_index] is None):
-            state_vector[0 : 2] = self.get_card(state.player_cards[player_index][0])
-            state_vector[2 : 4] = self.get_card(state.player_cards[player_index][1])
-            state_vector[0] = state_vector[0] / 14 # Max value for a rank
-            state_vector[1] = state_vector[1] / 4 # Max value for a suit
+        if not (state.player_cards[player_index] is None):
+            state_vector[0: 2] = self.get_card(state.player_cards[player_index][0])
+            state_vector[2: 4] = self.get_card(state.player_cards[player_index][1])
+            state_vector[0] = state_vector[0] / 14  # Max value for a rank
+            state_vector[1] = state_vector[1] / 4  # Max value for a suit
             state_vector[2] = state_vector[0] / 14  # Max value for a rank
             state_vector[3] = state_vector[1] / 4  # Max value for a suit
 
         # Encode own bank
-        state_vector[4] = state.player_banks[player_index] / self.__max_pot # Max value for a bank
+        state_vector[4] = state.player_banks[player_index] / self.__max_pot  # Max value for a bank
 
         # Encode community cards
         for i in range(len(state.board_cards)):
-            if not(state.board_cards[i] is None):
-                state_vector[5 + (i * 2) : 5 + (i * 2) + 2] = self.get_card(state.board_cards[i])
-                state_vector[5 + (i * 2)] = state_vector[5 + (i * 2)] / 14 # Max value for a rank
+            if not (state.board_cards[i] is None):
+                state_vector[5 + (i * 2): 5 + (i * 2) + 2] = self.get_card(state.board_cards[i])
+                state_vector[5 + (i * 2)] = state_vector[5 + (i * 2)] / 14  # Max value for a rank
                 state_vector[5 + (i * 2) + 1] = state_vector[5 + (i * 2) + 1] / 4  # Max value for a suit
                 # Community cards that have an unknown value will remain 0
 
         # Encode the pool
-        state_vector[15] = state.pot / (self.__max_pot * number_of_agents) # Maximum theoretical pot
+        state_vector[15] = state.pot / (self.__max_pot * number_of_agents)  # Maximum theoretical pot
 
         # Encode the betting round
-        state_vector[16] = state.betting_round / 4 # Max value for betting rounds
+        state_vector[16] = state.betting_round / 4  # Max value for betting rounds
 
         # Encode the other player statuses
         agent_index = 0
@@ -294,7 +313,7 @@ class Agent:
             # Skip the own players status
             if i == player_index:
                 continue
-            state_vector[17 + agent_index] = state.player_statuses[agent_index] # Already capped between 0 and 1
+            state_vector[17 + agent_index] = state.player_statuses[agent_index]  # Already capped between 0 and 1
             agent_index = agent_index + 1
 
         # Encode the other player bets
@@ -303,7 +322,8 @@ class Agent:
             # Skip the own players status
             if i == player_index:
                 continue
-            state_vector[22 + agent_index] = state.player_bets[agent_index] / self.__max_pot # Theoretical max bet per player
+            state_vector[22 + agent_index] = state.player_bets[
+                                                 agent_index] / self.__max_pot  # Theoretical max bet per player
             agent_index = agent_index + 1
 
         # Encode the other player banks
@@ -312,10 +332,14 @@ class Agent:
             # Skip the own players bank
             if i == player_index:
                 continue
-            state_vector[27 + agent_index] = state.player_banks[agent_index] / self.__max_pot # Max bank per player
+            state_vector[27 + agent_index] = state.player_banks[agent_index] / self.__max_pot  # Max bank per player
             agent_index = agent_index + 1
 
         return state_vector
+
+    def get_epsilon(self):
+        return self.__epsilon
+
 
 def progress_bar(percent, epoch):
     """
@@ -332,23 +356,31 @@ def progress_bar(percent, epoch):
     sys.stdout.write(f'\rEpoch {epoch} [{bar}] {percent:.2f}%')
     sys.stdout.flush()
 
+def logarithmic(x, a, b):
+    return a * np.log(x) + b
+
+def exponential(x, a, b):
+    return a * np.exp(-b * x)
+
 # Main training loop
 def main():
-
     # Define training parameters
-    games_per_epoch = 1000
-    epochs = 100
+    games_per_epoch = 100
+    epochs = 2500
 
     # Initialize game environment
     agent_list = []
     mean_reward_list = []
+    mean_loss_list = []
+    loss = []
     n_step = 3
-    gamma=0.99
-    max_bank=10000
-    shared_memory=NStepReplayBuffer(100000, n_step, gamma)
+    gamma = 0.75
+    max_bank = 10000
+    # shared_memory = NStepReplayBuffer(100000000, n_step, gamma)
+    shared_memory=None
     for i in range(number_of_agents):
         agent_list.append(Agent(state_size, action_size, n_step, gamma, shared_memory, max_bank))
-    env = PokerGame(number_of_players=number_of_agents, max_bank=max_bank)
+    env = PokerGame(number_of_players=number_of_agents, ante=100, max_bank=max_bank, starting_stacks=1000)
 
     # Record the start time
     start_time = time.perf_counter()
@@ -356,9 +388,10 @@ def main():
     for epoch in range(epochs):
 
         games_won = np.zeros(number_of_agents)
-        last_actions = [0] * number_of_agents # Track the last agent each agent took
-        last_state = np.zeros((number_of_agents, state_size)) # Track the last state that resulted in the last action
+        last_actions = [0] * number_of_agents  # Track the last agent each agent took
+        last_state = np.zeros((number_of_agents, state_size))  # Track the last state that resulted in the last action
         final_state = [0] * state_size
+        folded = [0] * number_of_agents
         for game in range(games_per_epoch):
 
             # starting_player = random.randint(0, 5)
@@ -386,11 +419,16 @@ def main():
                     agent_action = agent.act(state_vector)
                     decoded_action = agent.decode_action(agent_action)
                     # Map action index to actual action in the environment
-                    next_state = env.execute_agent_action(decoded_action)
+                    executed_action = env.execute_agent_action(decoded_action)
+                    # Update the action the agent think they took with the one they actually took
+                    agent_action = agent.encode_action(executed_action)
+                    # Keep track of how many times each agent folded
+                    if executed_action == "F":
+                        folded[index] = folded[index] + 1
                     # Update state vector based on the new state from the agent's action
-                    next_state_vector = agent.get_state_vector(next_state, index)
+                    next_state_vector = agent.get_state_vector(env.encode_game_state(), index)
                     # Get the reward from the environment based on the previous action
-                    reward = env.get_reward(i) # Environment tracks players based on I value, not index
+                    reward = env.get_reward(i)  # Environment tracks players based on I value, not index
                     # Record this reward for metrics
                     agent.update_epoch_reward(reward)
                     # Check if the game is finished
@@ -402,7 +440,9 @@ def main():
                     # Remember the experience
                     agent.remember(state_vector, agent_action, reward, next_state_vector, done)
                     # Learn from experience
-                    agent.replay()
+                    current_loss = agent.replay()
+                    if current_loss is not None:
+                        loss.append(current_loss)
                     # Store this action as the last action the agent took
                     last_actions[index] = agent_action
                     last_state[index] = state_vector
@@ -420,7 +460,6 @@ def main():
             # Assign final reward value for each agent
             end_rewards = env.finish_game()
             for i in range(number_of_agents):
-
                 # Get the correct player assignments
                 index = (starting_player + i) % number_of_agents
                 agent = agent_list[index]
@@ -431,29 +470,34 @@ def main():
                 # Store the final experience
                 agent.remember(last_state[index], last_actions[index], reward, final_state, 1)
 
-                # Perform learning
-                agent.replay()
+                # Learn from experience
+                current_loss = agent.replay()
+                if current_loss is not None:
+                    loss.append(current_loss)
 
         # Print the metrics for each agent
-        progress_bar(100, epoch) # Finish the progress bar
+        progress_bar(100, epoch)  # Finish the progress bar
         rewards = []
         print("")
         print("Epoch " + str(epoch) + " results:")
         for idx, agent in enumerate(agent_list):
-            print(f"Agent {idx}, Games Won: {games_won[idx]}, Total Reward: {agent.get_epoch_reward()}")
+            print(
+                f"Agent {idx}, Games Won: {games_won[idx]}, Games folded: {folded[idx]}, Agent bank: ${env.get_player_bank(idx)}, Epsilon: {agent.get_epsilon()}, Total Reward: {agent.get_epoch_reward()}")
             rewards.append(agent.get_epoch_reward())
             agent.reset_epoch_reward()
         print("Average reward for this Epoch " + str(epoch) + ": " + str(np.mean(rewards)))
         mean_reward_list.append(np.mean(rewards))
+        if not None in loss and len(loss) > 0:
+            mean_loss_list.append(np.mean([tensor.item() for tensor in loss]))
+        loss = []
 
         # Save the weights every 100 epochs
-        if epoch % 100 == 0:
+        if epoch % 10 == 0:
             # Save the trained model that had the highest number of games won
             best_agent_idx = np.where(rewards == np.max(rewards))[0][0]
             print("Agent " + str(
                 best_agent_idx) + " had the best performance in the last epoch. Saving the model weights.")
             torch.save(agent_list[best_agent_idx].get_policy_network().state_dict(), 'dqn_poker_model.pth')
-
 
     # Record the end time
     end_time = time.perf_counter()
@@ -462,18 +506,34 @@ def main():
     execution_time = end_time - start_time
     print(f"Total execution time: {execution_time} seconds")
 
+    # Calculate regression of the mean rewards
+    x = np.linspace(1, len(mean_reward_list), len(mean_reward_list))
+    param, param_cov = curve_fit(logarithmic, x, mean_reward_list)
+
     # Plot mean rewards over time
-    plt.plot(mean_reward_list)
+    plt.plot(x, mean_reward_list, 'yo', x, logarithmic(x, param[0], param[1]), '--k')
     plt.ylabel('Mean Reward Value')
     plt.xlabel('Epoch')
     plt.title('Mean Reward Value per Epoch')
     plt.show()
 
+    # Calculate regression of the mean loss. This data looks more exponential in nature, so we map the linear to an exponential curve
+    mean_loss_list.pop(0) # Ignore the first value since it skews the data too hard
+    x = np.linspace(1, len(mean_loss_list), len(mean_loss_list))
+    param, param_cov = curve_fit(exponential, x, mean_loss_list)
+
+    # Plot mean loss over time
+    plt.plot(x, mean_loss_list, 'yo', x, exponential(x, param[0], param[1]), '--k')
+    plt.ylabel('Mean Loss Value')
+    plt.xlabel('Epoch')
+    plt.title('Mean Loss Value per Epoch')
+    plt.show()
 
     # Save the trained model that had the highest number of games won
     best_agent_idx = np.where(rewards == np.max(rewards))[0][0]
     print("Agent " + str(best_agent_idx) + " had the best performance in the last epoch. Saving the model weights.")
     torch.save(agent_list[best_agent_idx].get_policy_network().state_dict(), 'dqn_poker_model.pth')
+
 
 if __name__ == "__main__":
     main()
