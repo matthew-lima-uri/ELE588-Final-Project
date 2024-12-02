@@ -4,7 +4,11 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="ce4e473f-4dec-4c0f-a50a-d2ed15b40280" name="Changes" comment="Updated to allow Q predictions based on predicted future rewards.">
+    <list default="true" id="ce4e473f-4dec-4c0f-a50a-d2ed15b40280" name="Changes" comment="Updated agent parameters and game environment. Current model weights have played ~100000 games.">
+      <change afterPath="$PROJECT_DIR$/Agent.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/DQNAgent.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/DQN_Utils.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/ProbabilityAgent.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/PokerKitEnvironmentTest.py" beforeDir="false" afterPath="$PROJECT_DIR$/PokerKitEnvironmentTest.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/TexasAgent.py" beforeDir="false" afterPath="$PROJECT_DIR$/TexasAgent.py" afterDir="false" />
@@ -42,24 +46,26 @@
   &quot;associatedIndex&quot;: 2
 }</component>
   <component name="ProjectId" id="2nz1UL8zKMrpVFkTnvO1oXUbSLK" />
-  <component name="ProjectLevelVcsManager" settingsEditedManually="true" />
+  <component name="ProjectLevelVcsManager" settingsEditedManually="true">
+    <ConfirmationsSetting value="2" id="Add" />
+  </component>
   <component name="ProjectViewState">
     <option name="hideEmptyMiddlePackages" value="true" />
     <option name="showLibraryContents" value="true" />
   </component>
-  <component name="PropertiesComponent"><![CDATA[{
-  "keyToString": {
-    "Python.PokerKitEnvironmentTest.executor": "Run",
-    "Python.PokerKitTest.executor": "Run",
-    "Python.TexasAgent.executor": "Run",
-    "Python.gym.executor": "Debug",
-    "RunOnceActivity.ShowReadmeOnStart": "true",
-    "git-widget-placeholder": "master",
-    "ignore.virus.scanning.warn.message": "true",
-    "last_opened_file_path": "C:/ProgramData/anaconda3/condabin/conda.bat",
-    "settings.editor.selected.configurable": "com.jetbrains.python.configuration.PyActiveSdkModuleConfigurable"
+  <component name="PropertiesComponent">{
+  &quot;keyToString&quot;: {
+    &quot;Python.PokerKitEnvironmentTest.executor&quot;: &quot;Run&quot;,
+    &quot;Python.PokerKitTest.executor&quot;: &quot;Run&quot;,
+    &quot;Python.TexasAgent.executor&quot;: &quot;Run&quot;,
+    &quot;Python.gym.executor&quot;: &quot;Run&quot;,
+    &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
+    &quot;git-widget-placeholder&quot;: &quot;master&quot;,
+    &quot;ignore.virus.scanning.warn.message&quot;: &quot;true&quot;,
+    &quot;last_opened_file_path&quot;: &quot;C:/ProgramData/anaconda3/condabin/conda.bat&quot;,
+    &quot;settings.editor.selected.configurable&quot;: &quot;com.jetbrains.python.configuration.PyActiveSdkModuleConfigurable&quot;
   }
-}]]></component>
+}</component>
   <component name="RunManager">
     <configuration name="PokerKitEnvironmentTest" type="PythonConfigurationType" factoryName="Python" temporary="true" nameIsGenerated="true">
       <module name="ELE588_Final_Project" />
@@ -137,7 +143,15 @@
       <option name="project" value="LOCAL" />
       <updated>1732489630465</updated>
     </task>
-    <option name="localTasksCounter" value="5" />
+    <task id="LOCAL-00005" summary="Updated agent parameters and game environment. Current model weights have played ~100000 games.">
+      <option name="closed" value="true" />
+      <created>1732710352018</created>
+      <option name="number" value="00005" />
+      <option name="presentableId" value="LOCAL-00005" />
+      <option name="project" value="LOCAL" />
+      <updated>1732710352018</updated>
+    </task>
+    <option name="localTasksCounter" value="6" />
     <servers />
   </component>
   <component name="Vcs.Log.Tabs.Properties">
@@ -156,7 +170,8 @@
     <MESSAGE value="Updated PokerKitTest.py to include support for going all in." />
     <MESSAGE value="Able to train DQN agents that can play poker. Needs improvement." />
     <MESSAGE value="Updated to allow Q predictions based on predicted future rewards." />
-    <option name="LAST_COMMIT_MESSAGE" value="Updated to allow Q predictions based on predicted future rewards." />
+    <MESSAGE value="Updated agent parameters and game environment. Current model weights have played ~100000 games." />
+    <option name="LAST_COMMIT_MESSAGE" value="Updated agent parameters and game environment. Current model weights have played ~100000 games." />
   </component>
   <component name="XDebuggerManager">
     <watches-manager>

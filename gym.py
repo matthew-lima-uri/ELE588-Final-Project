@@ -1,6 +1,6 @@
 import numpy as np
 import pokerkit
-from pokerkit import NoLimitTexasHoldem, Automation, Mode
+from pokerkit import NoLimitTexasHoldem, Automation, Mode, Poker
 
 """
 Helpful PokerKit state properties
@@ -36,7 +36,7 @@ class PokerGame:
         self.__last_call = 0
         self.reset((starting_stacks,) * number_of_players)
         self.__max_bank = max_bank
-        self.__max_possible_bet = max_bank * number_of_players
+        self.__max_pot = max_bank * number_of_players
 
     def reset(self, starting_stacks):
 
@@ -70,7 +70,7 @@ class PokerGame:
         current_stacks = self.__game.stacks
         rewards = np.zeros(len(current_stacks))
         for idx, bank in enumerate(current_stacks):
-            if bank == 0:
+            if bank <= self.__ante:
                 current_stacks[idx] = self.__starting_stack
                 rewards[idx] = -1
             # If this player has the max amount of money allowed
@@ -167,8 +167,14 @@ class PokerGame:
     def is_game_finished(self):
         return not self.__game.status
 
-    def get_game_winner(self):
-        return self.__game.operations[-1].player_index, self.__game.operations[-1].amount
+    def get_game_winners(self):
+        winners = []
+        for operation in reversed(self.__game.operations):
+            if type(operation) != pokerkit.ChipsPulling:
+                break
+            if operation.amount > 0:
+                winners.append(operation.player_index)
+        return winners
 
     def get_relevant_operations_this_round(self):
 
@@ -193,7 +199,14 @@ class PokerGame:
             reversed_string_list = reversed_string_list + op
         return reversed_string_list
 
-    def execute_agent_action(self, action, raise_amount=5):
+    def execute_agent_action(self, player_index, action, raise_amount=5):
+
+        if raise_amount < self.__min_bet:
+            raise_amount = self.__min_bet
+
+        if player_index != self.__game.actor_index:
+            raise Exception("Incorrect agent turn!")
+
         action = action.upper()
         # Determine the minimum and maximum betting amounts
         min_raise_amount = self.__game.min_completion_betting_or_raising_to_amount
@@ -250,13 +263,13 @@ class PokerGame:
                     return "C"
         elif action == "A":
             # Set the raise amount to be the players entire bank
-            raise_amount = self.get_player_bank(self.__game.turn_index)
+            raise_amount = self.get_player_bank(player_index)
             # Rest of this code is the same as raising...
             # If the raise amount is less than the minimum, set it to the minimum
             if raise_amount < min_raise_amount:
                 raise_amount = min_raise_amount
             # Ensure the player has enough to raise
-            if raise_amount > self.__game.get_effective_stack(self.__game.turn_index):
+            if raise_amount > self.get_player_bank(player_index):
                 # Can't raise, so check or call
                 if self.__game.can_check_or_call():
                     self.__game.check_or_call()
@@ -282,7 +295,6 @@ class PokerGame:
 
     def get_reward(self, player_index):
 
-        # Determine events that occurred between the previous state and the current state
         last_operation = None
         for operation in reversed(self.__game.operations):
             try:
@@ -296,23 +308,24 @@ class PokerGame:
         if last_operation is None:
             return 0
 
-        if type(last_operation) == pokerkit.CompletionBettingOrRaisingTo:
-            # If the player went all in, heavily punish them
-            if self.get_player_bank(player_index) == 0:
-                return -0.9
-            else:
-                return -0.25 * (last_operation.amount / (self.get_player_bank(player_index) + last_operation.amount))
-        elif type(last_operation) == pokerkit.CheckingOrCalling:
-            # If there is money involved in the call, assign a slight negative reward
-            if last_operation.amount > 0:
-                return -0.1 * (last_operation.amount / (self.get_player_bank(player_index) + last_operation.amount))
-            # If the call is a check, no negative reward needed
+        # Assign a negative reward for raising / calling proportional to the amount of money invested
+        if type(last_operation) == pokerkit.CompletionBettingOrRaisingTo or type(last_operation) == pokerkit.CheckingOrCalling:
+            return np.clip(a=-10 * last_operation.amount / self.__max_pot, a_min=-1, a_max=1)
+
+        # Positive reward for winning chips
+        elif type(last_operation) == pokerkit.ChipsPulling:
+            payoff = self.__game.payoffs[player_index]
+
+            # Give a reward for a positive payoff
+            if payoff > 0:
+                return payoff / self.__max_pot  # Normalize the payoff
+            # No reward for losing
             else:
                 return 0
-        elif type(last_operation) == pokerkit.Folding:
-            # Reward loss is the total amount of money the player invested into this game
-            return -0.25 * ((self.__game.bets[player_index] + self.__game.antes[player_index]) / (self.get_player_bank(player_index) + self.__game.bets[player_index] + self.__game.antes[player_index]))
-        elif type(last_operation) == pokerkit.ChipsPulling:
-            return (self.__game.payoffs[player_index] / self.__max_bank) + 1
 
-        return 0
+        # Associate a slight negative reward with folding
+        elif type(last_operation) == pokerkit.Folding:
+            return -0.01
+
+        else:
+            return 0  # Neutral reward otherwise

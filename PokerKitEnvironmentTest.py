@@ -1,13 +1,17 @@
+import DQN_Utils
 from gym import PokerGame
-from TexasAgent import Agent
+from TexasAgent import DoubleDQNAgent, DuelingDQNAgent
 import os
 
-num_players = 6
+num_players = 5
+state_size = (2 * 2) + 1 + (5 * 2) + 1 + 1 + ((num_players - 1) * 1) + ((num_players - 1) * 1) + (
+            (num_players - 1) * 1)
 real_players = 1
-env = PokerGame(number_of_players=num_players, ante=100, minimum_bet=1, starting_stacks=1000, max_bank=10000)
+max_bank = 10000
+env = PokerGame(number_of_players=num_players, ante=100, max_bank=max_bank, starting_stacks=1000, minimum_bet=50)
 agents = []
 for i in range(num_players - real_players):
-    agents.append(Agent(32, 4, ))
+    agents.append(DuelingDQNAgent(state_size, 4, ))
     agents[-1].load_policy_network('dqn_poker_model.pth')
 
 
@@ -54,6 +58,10 @@ while True:
                 betting_round = env.get_betting_round()
                 break
 
+            # If the player went all in, skip their turn
+            if env.get_player_bank(player) == 0:
+                continue
+
             # Process real player data
             if player < real_players:
 
@@ -88,7 +96,7 @@ while True:
                 while True:
                     try:
                         a, r = get_player_action()
-                        env.execute_agent_action(a, r)
+                        env.execute_agent_action(player, a, r)
                         break
                     except Exception as e:
                         print("Failed to execute action because:")
@@ -104,13 +112,11 @@ while True:
                     board_hand = env.get_board_cards()
                     print("Hole cards: ")
                     [print(card.__str__()) for card in player_hand]
-                    print("Player + " + str(player + 1) + " Best hand: " + str(env.get_best_hand(player)))
+                    print("Best hand: " + str(env.get_best_hand(player)))
                     print("")
-
-                game_state = agents[player - real_players].get_state_vector(env.encode_game_state(), player)
-                action = agents[player - real_players].decode_action(
-                    agents[player - real_players].act(game_state, True))
-                env.execute_agent_action(action)
+                game_state = DQN_Utils.get_state_vector(env.encode_game_state(), player, max_pot=max_bank)
+                action = DQN_Utils.decode_action(agents[player - real_players].act(game_state, True))
+                env.execute_agent_action(player, action)
 
     if debug_mode:
         analyze_data = input("Press enter to make next action...")
